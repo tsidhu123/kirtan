@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kirtan Stream</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.09);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.68);
+      --accent: #7cdbff;
+      --accent2: #b6ffb0;
+      --ring: rgba(124,219,255,0.25);
+      --shadow: 0 20px 60px rgba(0,0,0,0.55);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background:
+        radial-gradient(1200px 800px at 50% 35%, rgba(124,219,255,0.12), transparent 60%),
+        radial-gradient(900px 700px at 20% 85%, rgba(182,255,176,0.10), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: min(980px, 100%);
+      height: min(720px, 100vh - 48px);
+      display: grid;
+      grid-template-rows: 1fr auto;
+      gap: 18px;
+    }
+
+    .stage {
+      background: linear-gradient(180deg, var(--card), rgba(255,255,255,0.03));
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .topbar {
+      position: absolute;
+      left: 18px;
+      top: 16px;
+      right: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+
+    .brand {
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .brand .title {
+      font-size: 16px;
+      letter-spacing: 0.2px;
+      font-weight: 650;
+    }
+    .brand .subtitle {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .statusPill {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      color: var(--muted);
+      font-size: 12px;
+      user-select: none;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.25);
+      box-shadow: 0 0 0 6px rgba(255,255,255,0.06);
+    }
+    .dot.playing {
+      background: var(--accent2);
+      box-shadow: 0 0 0 6px rgba(182,255,176,0.18);
+    }
+    .dot.loading {
+      background: var(--accent);
+      box-shadow: 0 0 0 6px rgba(124,219,255,0.18);
+    }
+    .dot.error {
+      background: #ff6b6b;
+      box-shadow: 0 0 0 6px rgba(255,107,107,0.18);
+    }
+
+    .center {
+      display: grid;
+      place-items: center;
+      text-align: center;
+      gap: 18px;
+      width: 100%;
+      max-width: 560px;
+    }
+
+    .nowPlaying {
+      display: grid;
+      gap: 6px;
+    }
+    .nowPlaying .label {
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.3px;
+    }
+    .nowPlaying .streamName {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .playBtn {
+      width: min(220px, 64vw);
+      aspect-ratio: 1 / 1;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: radial-gradient(circle at 35% 35%, rgba(124,219,255,0.18), rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.03));
+      box-shadow:
+        0 18px 60px rgba(0,0,0,0.50),
+        inset 0 0 0 1px rgba(255,255,255,0.10);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      user-select: none;
+      transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+      outline: none;
+    }
+    .playBtn:hover {
+      transform: translateY(-2px);
+      border-color: rgba(124,219,255,0.35);
+      box-shadow:
+        0 22px 70px rgba(0,0,0,0.55),
+        0 0 0 10px var(--ring),
+        inset 0 0 0 1px rgba(255,255,255,0.12);
+    }
+    .playBtn:active { transform: translateY(0px) scale(0.985); }
+
+    .icon {
+      width: 82px;
+      height: 82px;
+      fill: rgba(255,255,255,0.92);
+      filter: drop-shadow(0 10px 25px rgba(0,0,0,0.45));
+    }
+
+    .hint {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .filters {
+      background: linear-gradient(180deg, var(--card2), rgba(255,255,255,0.04));
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .filtersHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.2px;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.86);
+      padding: 10px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+    }
+    .chip:hover { transform: translateY(-1px); border-color: rgba(124,219,255,0.35); }
+    .chip.active {
+      border-color: rgba(182,255,176,0.55);
+      background: rgba(182,255,176,0.14);
+    }
+
+    .rightControls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .volume {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      user-select: none;
+    }
+
+    input[type="range"] {
+      width: 160px;
+      accent-color: var(--accent);
+    }
+
+    @media (max-width: 520px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      input[type="range"] { width: 130px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="stage">
+      <div class="topbar">
+        <div class="brand">
+          <div class="title">Kirtan Stream</div>
+          <div class="subtitle">Simple listening • one page</div>
+        </div>
+
+        <div class="statusPill" id="statusPill" aria-live="polite">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Paused</span>
+        </div>
+      </div>
+
+      <div class="center">
+        <div class="nowPlaying">
+          <div class="label">Now playing</div>
+          <div class="streamName" id="streamName">Select a filter below</div>
+        </div>
+
+        <button class="playBtn" id="playBtn" aria-label="Play or pause">
+          <!-- Play icon (default) -->
+          <svg class="icon" id="playIcon" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M24 18.5v27c0 1.7 1.9 2.7 3.3 1.8l21.5-13.5c1.3-.8 1.3-2.7 0-3.6L27.3 16.7c-1.4-.9-3.3.1-3.3 1.8z"/>
+          </svg>
+          <!-- Pause icon (hidden until playing) -->
+          <svg class="icon" id="pauseIcon" viewBox="0 0 64 64" aria-hidden="true" style="display:none">
+            <path d="M22 18c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v28c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2V18zm12 0c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v28c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2V18z"/>
+          </svg>
+        </button>
+
+        <div class="hint" id="hint">
+          Tip: some streams require HTTPS and may block playback unless opened from a web server.
+        </div>
+
+        <!-- Audio element (stream player) -->
+        <audio id="audio" preload="none" crossorigin="anonymous"></audio>
+      </div>
+    </section>
+
+    <footer class="filters">
+      <div class="filtersHeader">
+        <div>Filters (choose what kind of kirtan you want)</div>
+        <div class="rightControls">
+          <div class="volume">
+            <span>Volume</span>
+            <input id="vol" type="range" min="0" max="1" step="0.01" value="0.9" />
+          </div>
+        </div>
+      </div>
+
+      <div class="chips" id="chips"></div>
+    </footer>
+  </div>
+
+  <script>
+    /**
+     * Put your real stream URLs here.
+     * Each entry becomes a filter chip.
+     *
+     * Notes:
+     * - Prefer HTTPS streams.
+     * - Some radio/icecast streams need a ".m3u" / ".pls" endpoint.
+     * - Browser autoplay policies: user must click Play at least once.
+     */
+    const STREAMS = [
+      {
+        id: "live",
+        name: "Live Gurdwara",
+        url: "https://YOUR_STREAM_URL_HERE/live.mp3"
+      },
+      {
+        id: "akj",
+        name: "AKJ Style",
+        url: "https://YOUR_STREAM_URL_HERE/akj.mp3"
+      },
+      {
+        id: "slow",
+        name: "Slow / Naam Simran",
+        url: "https://YOUR_STREAM_URL_HERE/slow.mp3"
+      },
+      {
+        id: "tabla",
+        name: "Tabla / Harmonium",
+        url: "https://YOUR_STREAM_URL_HERE/tabla.mp3"
+      }
+    ];
+
+    const audio = document.getElementById("audio");
+    const playBtn = document.getElementById("playBtn");
+    const playIcon = document.getElementById("playIcon");
+    const pauseIcon = document.getElementById("pauseIcon");
+    const streamName = document.getElementById("streamName");
+    const chips = document.getElementById("chips");
+    const vol = document.getElementById("vol");
+
+    const statusDot = document.getElementById("statusDot");
+    const statusText = document.getElementById("statusText");
+    const hint = document.getElementById("hint");
+
+    let current = STREAMS[0];     // default selection
+    let userPaused = true;        // track if user wants it paused
+
+    function setStatus(state, text) {
+      statusDot.classList.remove("playing", "loading", "error");
+      if (state) statusDot.classList.add(state);
+      statusText.textContent = text;
+    }
+
+    function setIcons(isPlaying) {
+      playIcon.style.display = isPlaying ? "none" : "block";
+      pauseIcon.style.display = isPlaying ? "block" : "none";
+    }
+
+    function buildChips() {
+      chips.innerHTML = "";
+      STREAMS.forEach(s => {
+        const btn = document.createElement("button");
+        btn.className = "chip" + (s.id === current.id ? " active" : "");
+        btn.textContent = s.name;
+        btn.addEventListener("click", () => selectStream(s.id));
+        chips.appendChild(btn);
+      });
+    }
+
+    function selectStream(streamId) {
+      const next = STREAMS.find(s => s.id === streamId);
+      if (!next) return;
+
+      current = next;
+      streamName.textContent = current.name;
+
+      // swap source
+      audio.src = current.url;
+
+      // update chip UI
+      [...chips.querySelectorAll(".chip")].forEach((c, i) => {
+        c.classList.toggle("active", STREAMS[i].id === current.id);
+      });
+
+      // If user already pressed play, keep playing when switching
+      if (!userPaused) {
+        playStream();
+      } else {
+        setStatus(null, "Paused");
+        setIcons(false);
+      }
+    }
+
+    async function playStream() {
+      try {
+        setStatus("loading", "Loading…");
+        hint.textContent = "Loading stream…";
+        await audio.play();
+        userPaused = false;
+        setStatus("playing", "Playing");
+        setIcons(true);
+        hint.textContent = "Listening. Switch filters anytime.";
+      } catch (err) {
+        // Common causes: bad URL, mixed content (http on https), CORS, stream not supported
+        console.error(err);
+        userPaused = true;
+        setStatus("error", "Can’t play");
+        setIcons(false);
+        hint.textContent =
+          "Playback failed. Check the stream URL (HTTPS), or run from a local web server to avoid browser restrictions.";
+      }
+    }
+
+    function pauseStream() {
+      audio.pause();
+      userPaused = true;
+      setStatus(null, "Paused");
+      setIcons(false);
+      hint.textContent = "Paused.";
+    }
+
+    playBtn.addEventListener("click", () => {
+      if (audio.paused) playStream();
+      else pauseStream();
+    });
+
+    vol.addEventListener("input", () => {
+      audio.volume = Number(vol.value);
+    });
+
+    // Audio event helpers (for nicer status)
+    audio.addEventListener("waiting", () => {
+      if (!audio.paused) setStatus("loading", "Buffering…");
+    });
+    audio.addEventListener("playing", () => {
+      if (!audio.paused) setStatus("playing", "Playing");
+    });
+    audio.addEventListener("pause", () => {
+      if (userPaused) setStatus(null, "Paused");
+    });
+    audio.addEventListener("error", () => {
+      setStatus("error", "Stream error");
+      setIcons(false);
+    });
+
+    // init
+    audio.volume = Number(vol.value);
+    streamName.textContent = current.name;
+    audio.src = current.url;
+    buildChips();
+    setStatus(null, "Paused");
+    setIcons(false);
+  </script>
+</body>
+</html>
+
