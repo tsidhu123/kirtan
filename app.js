@@ -67,6 +67,15 @@ const SCHEDULE = [
   },
 ];
 
+const SUPPORTED_AUDIO_EXTENSIONS = new Set([
+  ".mp3",
+  ".m4a",
+  ".aac",
+  ".wav",
+  ".ogg",
+  ".flac",
+]);
+
 const audio = document.getElementById("audio");
 const playBtn = document.getElementById("playBtn");
 const playIcon = document.getElementById("playIcon");
@@ -84,6 +93,92 @@ let current = STREAMS[0];
 let userPaused = true;
 let autoScheduleEnabled = true;
 let scheduleTimer = null;
+let currentTrackIndex = 0;
+let activeTrackList = [];
+let directoryLoadToken = 0;
+
+const playedByStream = new Map();
+const directoryTrackCache = new Map();
+
+function isDirectoryStream(stream) {
+  return stream.url.endsWith("/");
+}
+
+function getTrackNameFromUrl(url) {
+  const cleanUrl = url.split("?")[0].split("#")[0];
+  const parts = cleanUrl.split("/");
+  return parts[parts.length - 1] || cleanUrl;
+}
+
+function hasSupportedAudioExtension(url) {
+  const pathname = new URL(url, window.location.href).pathname.toLowerCase();
+  return [...SUPPORTED_AUDIO_EXTENSIONS].some((ext) => pathname.endsWith(ext));
+}
+
+function getDirectoryUrl(directoryPath) {
+  return new URL(directoryPath, window.location.href);
+}
+
+function parseDirectoryTracks(html, directoryPath) {
+  const directoryUrl = getDirectoryUrl(directoryPath);
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  const links = [...doc.querySelectorAll("a[href]")]
+    .map((link) => link.getAttribute("href"))
+    .filter(Boolean)
+    .map((href) => new URL(href, directoryUrl).toString())
+    .filter((absoluteUrl) => {
+      if (!hasSupportedAudioExtension(absoluteUrl)) return false;
+      const absolute = new URL(absoluteUrl);
+      return absolute.pathname.startsWith(directoryUrl.pathname);
+    });
+
+  return [...new Set(links)].sort();
+}
+
+async function scanDirectoryTracks(directoryPath) {
+  if (directoryTrackCache.has(directoryPath)) {
+    return directoryTrackCache.get(directoryPath);
+  }
+
+  const response = await fetch(directoryPath, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Directory scan failed: ${response.status}`);
+  }
+
+  const html = await response.text();
+  const tracks = parseDirectoryTracks(html, directoryPath);
+  directoryTrackCache.set(directoryPath, tracks);
+  return tracks;
+}
+
+function markCurrentTrackPlayed() {
+  if (!isDirectoryStream(current) || !activeTrackList.length) return;
+
+  if (!playedByStream.has(current.id)) {
+    playedByStream.set(current.id, new Set());
+  }
+
+  const currentTrack = activeTrackList[currentTrackIndex];
+  playedByStream.get(current.id).add(currentTrack);
+}
+
+function updateNowPlayingText() {
+  if (!isDirectoryStream(current) || !activeTrackList.length) {
+    streamName.textContent = current.name;
+    return;
+  }
+
+  const trackName = getTrackNameFromUrl(activeTrackList[currentTrackIndex]);
+  streamName.textContent = `${current.name} • ${trackName}`;
+}
+
+function updateDirectoryTrackingHint() {
+  if (!isDirectoryStream(current) || !activeTrackList.length) return;
+
+  const playedCount = playedByStream.get(current.id)?.size || 0;
+  hint.textContent = `Track ${currentTrackIndex + 1}/${activeTrackList.length} • Played ${playedCount}/${activeTrackList.length}`;
+}
 
 function setStatus(state, text) {
   statusDot.classList.remove("playing", "loading", "error");
@@ -107,6 +202,52 @@ function buildChips() {
   });
 }
 
+async function prepareDirectoryStream(stream, { shouldAutoplay = false } = {}) {
+  const requestToken = ++directoryLoadToken;
+  activeTrackList = [];
+  currentTrackIndex = 0;
+  audio.src = "";
+
+  setStatus("loading", "Scanning…");
+  hint.textContent = "Scanning directory for audio files…";
+
+  try {
+    const tracks = await scanDirectoryTracks(stream.url);
+
+    if (requestToken !== directoryLoadToken || current.id !== stream.id) {
+      return;
+    }
+
+    activeTrackList = tracks;
+
+    if (!activeTrackList.length) {
+      setStatus("error", "No tracks found");
+      hint.textContent = "No playable audio files found in this directory.";
+      setIcons(false);
+      return;
+    }
+
+    audio.src = activeTrackList[0];
+    updateNowPlayingText();
+
+    if (shouldAutoplay) {
+      playStream();
+    } else {
+      setStatus(null, "Paused");
+      setIcons(false);
+      updateDirectoryTrackingHint();
+    }
+  } catch (err) {
+    console.error(err);
+    if (requestToken !== directoryLoadToken || current.id !== stream.id) {
+      return;
+    }
+    setStatus("error", "Scan failed");
+    setIcons(false);
+    hint.textContent = "Could not scan directory. Enable directory listing on your server.";
+  }
+}
+
 function selectStream(streamId, options = {}) {
   const next = STREAMS.find((s) => s.id === streamId);
   if (!next) return;
@@ -117,12 +258,23 @@ function selectStream(streamId, options = {}) {
   }
 
   current = next;
-  streamName.textContent = current.name;
-  audio.src = current.url;
 
   [...chips.children].forEach((c, i) => {
     c.classList.toggle("active", STREAMS[i].id === current.id);
   });
+
+  if (isDirectoryStream(current)) {
+    prepareDirectoryStream(current, {
+      shouldAutoplay: !userPaused && !options.skipAutoplay,
+    });
+    return;
+  }
+
+  directoryLoadToken += 1;
+  activeTrackList = [];
+  currentTrackIndex = 0;
+  audio.src = current.url;
+  updateNowPlayingText();
 
   if (!userPaused && !options.skipAutoplay) playStream();
   else {
@@ -134,13 +286,29 @@ function selectStream(streamId, options = {}) {
 
 async function playStream() {
   try {
+    if (isDirectoryStream(current)) {
+      if (!activeTrackList.length) {
+        setStatus("error", "No tracks found");
+        hint.textContent = "No playable audio files found in this directory.";
+        return;
+      }
+      audio.src = activeTrackList[currentTrackIndex];
+      updateNowPlayingText();
+    }
+
     setStatus("loading", "Loading…");
     hint.textContent = "Loading stream…";
     await audio.play();
     userPaused = false;
+    markCurrentTrackPlayed();
     setStatus("playing", "Playing");
     setIcons(true);
-    hint.textContent = "Listening. Switch filters anytime.";
+
+    if (isDirectoryStream(current)) {
+      updateDirectoryTrackingHint();
+    } else {
+      hint.textContent = "Listening. Switch filters anytime.";
+    }
   } catch (err) {
     console.error(err);
     userPaused = true;
@@ -216,7 +384,14 @@ audio.addEventListener("waiting", () => {
   if (!audio.paused) setStatus("loading", "Buffering…");
 });
 audio.addEventListener("playing", () => {
-  if (!audio.paused) setStatus("playing", "Playing");
+  if (!audio.paused) {
+    markCurrentTrackPlayed();
+    setStatus("playing", "Playing");
+    if (isDirectoryStream(current)) {
+      updateDirectoryTrackingHint();
+      updateNowPlayingText();
+    }
+  }
 });
 audio.addEventListener("pause", () => {
   if (userPaused) setStatus(null, "Paused");
@@ -224,6 +399,13 @@ audio.addEventListener("pause", () => {
 audio.addEventListener("error", () => {
   setStatus("error", "Stream error");
   setIcons(false);
+});
+
+audio.addEventListener("ended", () => {
+  if (!isDirectoryStream(current) || !activeTrackList.length) return;
+
+  currentTrackIndex = (currentTrackIndex + 1) % activeTrackList.length;
+  playStream();
 });
 
 scheduleToggle.addEventListener("click", () => {
@@ -239,8 +421,12 @@ scheduleToggle.addEventListener("click", () => {
 audio.volume = Number(vol.value);
 applySchedule({ shouldPlay: false });
 if (!current) current = STREAMS[0];
-streamName.textContent = current.name;
-audio.src = current.url;
+if (isDirectoryStream(current)) {
+  prepareDirectoryStream(current, { shouldAutoplay: false });
+} else {
+  audio.src = current.url;
+  updateNowPlayingText();
+}
 buildChips();
 if (userPaused) {
   setStatus(null, "Paused");
