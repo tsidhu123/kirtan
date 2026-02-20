@@ -25,7 +25,7 @@ const STREAMS = [
   {
     id: "morning",
     name: "Morning Nitnem",
-    url: "media/morning_nitnem",
+    url: "media/morning_nitnem/",
   },
   {
     id: "tabla",
