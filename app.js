@@ -25,6 +25,7 @@ const STREAMS = [
   {
     id: "morning",
     name: "Morning Nitnem",
+    // Directory stream: files are discovered at runtime by scanning links in this folder.
     url: "media/morning_nitnem/",
     files: [
       "Japji_Sahib.mp3",
