@@ -26,6 +26,13 @@ const STREAMS = [
     id: "morning",
     name: "Morning Nitnem",
     url: "media/morning_nitnem/",
+    files: [
+      "Japji_Sahib.mp3",
+      "Jaap_Sahib.mp3",
+      "Tav-Prasad_Savaiye.mp3",
+      "Chaupai_Sahib.mp3",
+      "Anand_Sahib.mp3",
+    ],
   },
   {
     id: "tabla",
@@ -95,10 +102,8 @@ let autoScheduleEnabled = true;
 let scheduleTimer = null;
 let currentTrackIndex = 0;
 let activeTrackList = [];
-let directoryLoadToken = 0;
 
 const playedByStream = new Map();
-const directoryTrackCache = new Map();
 
 function isDirectoryStream(stream) {
   return stream.url.endsWith("/");
@@ -110,46 +115,10 @@ function getTrackNameFromUrl(url) {
   return parts[parts.length - 1] || cleanUrl;
 }
 
-function hasSupportedAudioExtension(url) {
-  const pathname = new URL(url, window.location.href).pathname.toLowerCase();
-  return [...SUPPORTED_AUDIO_EXTENSIONS].some((ext) => pathname.endsWith(ext));
-}
-
-function getDirectoryUrl(directoryPath) {
-  return new URL(directoryPath, window.location.href);
-}
-
-function parseDirectoryTracks(html, directoryPath) {
-  const directoryUrl = getDirectoryUrl(directoryPath);
-  const doc = new DOMParser().parseFromString(html, "text/html");
-
-  const links = [...doc.querySelectorAll("a[href]")]
-    .map((link) => link.getAttribute("href"))
-    .filter(Boolean)
-    .map((href) => new URL(href, directoryUrl).toString())
-    .filter((absoluteUrl) => {
-      if (!hasSupportedAudioExtension(absoluteUrl)) return false;
-      const absolute = new URL(absoluteUrl);
-      return absolute.pathname.startsWith(directoryUrl.pathname);
-    });
-
-  return [...new Set(links)].sort();
-}
-
-async function scanDirectoryTracks(directoryPath) {
-  if (directoryTrackCache.has(directoryPath)) {
-    return directoryTrackCache.get(directoryPath);
-  }
-
-  const response = await fetch(directoryPath, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Directory scan failed: ${response.status}`);
-  }
-
-  const html = await response.text();
-  const tracks = parseDirectoryTracks(html, directoryPath);
-  directoryTrackCache.set(directoryPath, tracks);
-  return tracks;
+function getDirectoryTracks(stream) {
+  if (!isDirectoryStream(stream)) return [];
+  if (!Array.isArray(stream.files)) return [];
+  return stream.files.map((file) => `${stream.url}${file}`);
 }
 
 function markCurrentTrackPlayed() {
@@ -259,6 +228,18 @@ function selectStream(streamId, options = {}) {
 
   current = next;
 
+  if (isDirectoryStream(current)) {
+    activeTrackList = getDirectoryTracks(current);
+    currentTrackIndex = 0;
+    audio.src = activeTrackList[0] || "";
+  } else {
+    activeTrackList = [];
+    currentTrackIndex = 0;
+    audio.src = current.url;
+  }
+
+  updateNowPlayingText();
+
   [...chips.children].forEach((c, i) => {
     c.classList.toggle("active", STREAMS[i].id === current.id);
   });
@@ -280,7 +261,11 @@ function selectStream(streamId, options = {}) {
   else {
     setStatus(null, "Paused");
     setIcons(false);
-    if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
+    if (isDirectoryStream(current) && activeTrackList.length) {
+      updateDirectoryTrackingHint();
+    } else if (autoScheduleEnabled) {
+      updateScheduleHint(getScheduledStream());
+    }
   }
 }
 
@@ -289,7 +274,7 @@ async function playStream() {
     if (isDirectoryStream(current)) {
       if (!activeTrackList.length) {
         setStatus("error", "No tracks found");
-        hint.textContent = "No playable audio files found in this directory.";
+        hint.textContent = "No files configured for this directory.";
         return;
       }
       audio.src = activeTrackList[currentTrackIndex];
@@ -424,12 +409,12 @@ scheduleToggle.addEventListener("click", () => {
 audio.volume = Number(vol.value);
 if (!current) current = STREAMS[0];
 if (isDirectoryStream(current)) {
-  prepareDirectoryStream(current, { shouldAutoplay: false });
+  activeTrackList = getDirectoryTracks(current);
+  audio.src = activeTrackList[0] || "";
 } else {
   audio.src = current.url;
-  updateNowPlayingText();
-  if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
 }
+updateNowPlayingText();
 buildChips();
 if (userPaused) {
   setStatus(null, "Paused");
