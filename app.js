@@ -23,9 +23,9 @@ const STREAMS = [
     url: "https://YOUR_STREAM_URL_HERE/sohila.mp3",
   },
   {
-    id: "slow",
-    name: "Slow / Naam Simran",
-    url: "https://YOUR_STREAM_URL_HERE/slow.mp3",
+    id: "morning",
+    name: "Morning Nitnem",
+    url: "media/morning_nitnem",
   },
   {
     id: "tabla",
@@ -36,9 +36,9 @@ const STREAMS = [
 
 const SCHEDULE = [
   {
-    id: "slow",
-    label: "Amrit Vela → Naam Simran",
-    startHour: 3,
+    id: "morning",
+    label: "Amrit Vela → Morning Nitnem",
+    startHour: 4,
     endHour: 6,
   },
   {
@@ -178,7 +178,7 @@ function updateScheduleToggle() {
   scheduleToggle.classList.toggle("active", autoScheduleEnabled);
   scheduleToggle.setAttribute(
     "aria-pressed",
-    autoScheduleEnabled ? "true" : "false"
+    autoScheduleEnabled ? "true" : "false",
   );
 }
 
