@@ -338,9 +338,12 @@ function updateScheduleToggle() {
 function applySchedule({ shouldPlay } = {}) {
   if (!autoScheduleEnabled) return;
   const entry = getScheduledStream();
+
   if (current.id !== entry.id) {
     selectStream(entry.id, { skipAutoplay: !shouldPlay });
+    return;
   }
+
   if (shouldPlay) {
     playStream();
   } else {
@@ -404,7 +407,6 @@ scheduleToggle.addEventListener("click", () => {
 });
 
 audio.volume = Number(vol.value);
-applySchedule({ shouldPlay: false });
 if (!current) current = STREAMS[0];
 if (isDirectoryStream(current)) {
   activeTrackList = getDirectoryTracks(current);
