@@ -26,6 +26,13 @@ const STREAMS = [
     id: "morning",
     name: "Morning Nitnem",
     url: "media/morning_nitnem/",
+    files: [
+      "Japji_Sahib.mp3",
+      "Jaap_Sahib.mp3",
+      "Tav-Prasad_Savaiye.mp3",
+      "Chaupai_Sahib.mp3",
+      "Anand_Sahib.mp3",
+    ],
   },
   {
     id: "tabla",
@@ -84,6 +91,54 @@ let current = STREAMS[0];
 let userPaused = true;
 let autoScheduleEnabled = true;
 let scheduleTimer = null;
+let currentTrackIndex = 0;
+let activeTrackList = [];
+
+const playedByStream = new Map();
+
+function isDirectoryStream(stream) {
+  return stream.url.endsWith("/");
+}
+
+function getTrackNameFromUrl(url) {
+  const cleanUrl = url.split("?")[0].split("#")[0];
+  const parts = cleanUrl.split("/");
+  return parts[parts.length - 1] || cleanUrl;
+}
+
+function getDirectoryTracks(stream) {
+  if (!isDirectoryStream(stream)) return [];
+  if (!Array.isArray(stream.files)) return [];
+  return stream.files.map((file) => `${stream.url}${file}`);
+}
+
+function markCurrentTrackPlayed() {
+  if (!isDirectoryStream(current) || !activeTrackList.length) return;
+
+  if (!playedByStream.has(current.id)) {
+    playedByStream.set(current.id, new Set());
+  }
+
+  const currentTrack = activeTrackList[currentTrackIndex];
+  playedByStream.get(current.id).add(currentTrack);
+}
+
+function updateNowPlayingText() {
+  if (!isDirectoryStream(current) || !activeTrackList.length) {
+    streamName.textContent = current.name;
+    return;
+  }
+
+  const trackName = getTrackNameFromUrl(activeTrackList[currentTrackIndex]);
+  streamName.textContent = `${current.name} • ${trackName}`;
+}
+
+function updateDirectoryTrackingHint() {
+  if (!isDirectoryStream(current) || !activeTrackList.length) return;
+
+  const playedCount = playedByStream.get(current.id)?.size || 0;
+  hint.textContent = `Track ${currentTrackIndex + 1}/${activeTrackList.length} • Played ${playedCount}/${activeTrackList.length}`;
+}
 
 function setStatus(state, text) {
   statusDot.classList.remove("playing", "loading", "error");
@@ -117,8 +172,18 @@ function selectStream(streamId, options = {}) {
   }
 
   current = next;
-  streamName.textContent = current.name;
-  audio.src = current.url;
+
+  if (isDirectoryStream(current)) {
+    activeTrackList = getDirectoryTracks(current);
+    currentTrackIndex = 0;
+    audio.src = activeTrackList[0] || "";
+  } else {
+    activeTrackList = [];
+    currentTrackIndex = 0;
+    audio.src = current.url;
+  }
+
+  updateNowPlayingText();
 
   [...chips.children].forEach((c, i) => {
     c.classList.toggle("active", STREAMS[i].id === current.id);
@@ -128,19 +193,39 @@ function selectStream(streamId, options = {}) {
   else {
     setStatus(null, "Paused");
     setIcons(false);
-    if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
+    if (isDirectoryStream(current) && activeTrackList.length) {
+      updateDirectoryTrackingHint();
+    } else if (autoScheduleEnabled) {
+      updateScheduleHint(getScheduledStream());
+    }
   }
 }
 
 async function playStream() {
   try {
+    if (isDirectoryStream(current)) {
+      if (!activeTrackList.length) {
+        setStatus("error", "No tracks found");
+        hint.textContent = "No files configured for this directory.";
+        return;
+      }
+      audio.src = activeTrackList[currentTrackIndex];
+      updateNowPlayingText();
+    }
+
     setStatus("loading", "Loading…");
     hint.textContent = "Loading stream…";
     await audio.play();
     userPaused = false;
+    markCurrentTrackPlayed();
     setStatus("playing", "Playing");
     setIcons(true);
-    hint.textContent = "Listening. Switch filters anytime.";
+
+    if (isDirectoryStream(current)) {
+      updateDirectoryTrackingHint();
+    } else {
+      hint.textContent = "Listening. Switch filters anytime.";
+    }
   } catch (err) {
     console.error(err);
     userPaused = true;
@@ -216,7 +301,14 @@ audio.addEventListener("waiting", () => {
   if (!audio.paused) setStatus("loading", "Buffering…");
 });
 audio.addEventListener("playing", () => {
-  if (!audio.paused) setStatus("playing", "Playing");
+  if (!audio.paused) {
+    markCurrentTrackPlayed();
+    setStatus("playing", "Playing");
+    if (isDirectoryStream(current)) {
+      updateDirectoryTrackingHint();
+      updateNowPlayingText();
+    }
+  }
 });
 audio.addEventListener("pause", () => {
   if (userPaused) setStatus(null, "Paused");
@@ -224,6 +316,13 @@ audio.addEventListener("pause", () => {
 audio.addEventListener("error", () => {
   setStatus("error", "Stream error");
   setIcons(false);
+});
+
+audio.addEventListener("ended", () => {
+  if (!isDirectoryStream(current) || !activeTrackList.length) return;
+
+  currentTrackIndex = (currentTrackIndex + 1) % activeTrackList.length;
+  playStream();
 });
 
 scheduleToggle.addEventListener("click", () => {
@@ -239,8 +338,13 @@ scheduleToggle.addEventListener("click", () => {
 audio.volume = Number(vol.value);
 applySchedule({ shouldPlay: false });
 if (!current) current = STREAMS[0];
-streamName.textContent = current.name;
-audio.src = current.url;
+if (isDirectoryStream(current)) {
+  activeTrackList = getDirectoryTracks(current);
+  audio.src = activeTrackList[0] || "";
+} else {
+  audio.src = current.url;
+}
+updateNowPlayingText();
 buildChips();
 if (userPaused) {
   setStatus(null, "Paused");
