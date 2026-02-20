@@ -27,6 +27,13 @@ const STREAMS = [
     name: "Morning Nitnem",
     // Directory stream: files are discovered at runtime by scanning links in this folder.
     url: "media/morning_nitnem/",
+    files: [
+      "Japji_Sahib.mp3",
+      "Jaap_Sahib.mp3",
+      "Tav-Prasad_Savaiye.mp3",
+      "Chaupai_Sahib.mp3",
+      "Anand_Sahib.mp3",
+    ],
   },
   {
     id: "tabla",
@@ -291,7 +298,11 @@ function selectStream(streamId, options = {}) {
   else {
     setStatus(null, "Paused");
     setIcons(false);
-    if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
+    if (isDirectoryStream(current) && activeTrackList.length) {
+      updateDirectoryTrackingHint();
+    } else if (autoScheduleEnabled) {
+      updateScheduleHint(getScheduledStream());
+    }
   }
 }
 
