@@ -13,3 +13,5 @@ The app will:
 - and play/track those files in order.
 
 This means you should **not** define fixed filenames in `app.js` for directory streams.
+
+If a `files` list is present for a directory stream, the app ignores it and uses scanned directory results only.

@@ -103,8 +103,20 @@ let autoScheduleEnabled = true;
 let scheduleTimer = null;
 let currentTrackIndex = 0;
 let activeTrackList = [];
+let directoryLoadToken = 0;
 
 const playedByStream = new Map();
+const directoryTrackCache = new Map();
+
+for (const stream of STREAMS) {
+  if (!isDirectoryStream(stream)) continue;
+  if (Object.prototype.hasOwnProperty.call(stream, "files")) {
+    console.warn(
+      `Ignoring deprecated "files" list on stream "${stream.id}". Directory streams are auto-scanned.`,
+    );
+    delete stream.files;
+  }
+}
 
 function isDirectoryStream(stream) {
   return stream.url.endsWith("/");
@@ -116,10 +128,46 @@ function getTrackNameFromUrl(url) {
   return parts[parts.length - 1] || cleanUrl;
 }
 
-function getDirectoryTracks(stream) {
-  if (!isDirectoryStream(stream)) return [];
-  if (!Array.isArray(stream.files)) return [];
-  return stream.files.map((file) => `${stream.url}${file}`);
+function hasSupportedAudioExtension(url) {
+  const pathname = new URL(url, window.location.href).pathname.toLowerCase();
+  return [...SUPPORTED_AUDIO_EXTENSIONS].some((ext) => pathname.endsWith(ext));
+}
+
+function getDirectoryUrl(directoryPath) {
+  return new URL(directoryPath, window.location.href);
+}
+
+function parseDirectoryTracks(html, directoryPath) {
+  const directoryUrl = getDirectoryUrl(directoryPath);
+  const doc = new DOMParser().parseFromString(html, "text/html");
+
+  const links = [...doc.querySelectorAll("a[href]")]
+    .map((link) => link.getAttribute("href"))
+    .filter(Boolean)
+    .map((href) => new URL(href, directoryUrl).toString())
+    .filter((absoluteUrl) => {
+      if (!hasSupportedAudioExtension(absoluteUrl)) return false;
+      const absolute = new URL(absoluteUrl);
+      return absolute.pathname.startsWith(directoryUrl.pathname);
+    });
+
+  return [...new Set(links)].sort();
+}
+
+async function scanDirectoryTracks(directoryPath) {
+  if (directoryTrackCache.has(directoryPath)) {
+    return directoryTrackCache.get(directoryPath);
+  }
+
+  const response = await fetch(directoryPath, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Directory scan failed: ${response.status}`);
+  }
+
+  const html = await response.text();
+  const tracks = parseDirectoryTracks(html, directoryPath);
+  directoryTrackCache.set(directoryPath, tracks);
+  return tracks;
 }
 
 function markCurrentTrackPlayed() {
@@ -229,18 +277,6 @@ function selectStream(streamId, options = {}) {
 
   current = next;
 
-  if (isDirectoryStream(current)) {
-    activeTrackList = getDirectoryTracks(current);
-    currentTrackIndex = 0;
-    audio.src = activeTrackList[0] || "";
-  } else {
-    activeTrackList = [];
-    currentTrackIndex = 0;
-    audio.src = current.url;
-  }
-
-  updateNowPlayingText();
-
   [...chips.children].forEach((c, i) => {
     c.classList.toggle("active", STREAMS[i].id === current.id);
   });
@@ -275,7 +311,7 @@ async function playStream() {
     if (isDirectoryStream(current)) {
       if (!activeTrackList.length) {
         setStatus("error", "No tracks found");
-        hint.textContent = "No files configured for this directory.";
+        hint.textContent = "No playable audio files found in this directory.";
         return;
       }
       audio.src = activeTrackList[currentTrackIndex];
@@ -410,12 +446,12 @@ scheduleToggle.addEventListener("click", () => {
 audio.volume = Number(vol.value);
 if (!current) current = STREAMS[0];
 if (isDirectoryStream(current)) {
-  activeTrackList = getDirectoryTracks(current);
-  audio.src = activeTrackList[0] || "";
+  prepareDirectoryStream(current, { shouldAutoplay: false });
 } else {
   audio.src = current.url;
+  updateNowPlayingText();
+  if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
 }
-updateNowPlayingText();
 buildChips();
 if (userPaused) {
   setStatus(null, "Paused");
