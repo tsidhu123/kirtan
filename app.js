@@ -74,6 +74,15 @@ const SCHEDULE = [
   },
 ];
 
+const SUPPORTED_AUDIO_EXTENSIONS = new Set([
+  ".mp3",
+  ".m4a",
+  ".aac",
+  ".wav",
+  ".ogg",
+  ".flac",
+]);
+
 const audio = document.getElementById("audio");
 const playBtn = document.getElementById("playBtn");
 const playIcon = document.getElementById("playIcon");
@@ -162,6 +171,52 @@ function buildChips() {
   });
 }
 
+async function prepareDirectoryStream(stream, { shouldAutoplay = false } = {}) {
+  const requestToken = ++directoryLoadToken;
+  activeTrackList = [];
+  currentTrackIndex = 0;
+  audio.src = "";
+
+  setStatus("loading", "Scanning…");
+  hint.textContent = "Scanning directory for audio files…";
+
+  try {
+    const tracks = await scanDirectoryTracks(stream.url);
+
+    if (requestToken !== directoryLoadToken || current.id !== stream.id) {
+      return;
+    }
+
+    activeTrackList = tracks;
+
+    if (!activeTrackList.length) {
+      setStatus("error", "No tracks found");
+      hint.textContent = "No playable audio files found in this directory.";
+      setIcons(false);
+      return;
+    }
+
+    audio.src = activeTrackList[0];
+    updateNowPlayingText();
+
+    if (shouldAutoplay) {
+      playStream();
+    } else {
+      setStatus(null, "Paused");
+      setIcons(false);
+      updateDirectoryTrackingHint();
+    }
+  } catch (err) {
+    console.error(err);
+    if (requestToken !== directoryLoadToken || current.id !== stream.id) {
+      return;
+    }
+    setStatus("error", "Scan failed");
+    setIcons(false);
+    hint.textContent = "Could not scan directory. Enable directory listing on your server.";
+  }
+}
+
 function selectStream(streamId, options = {}) {
   const next = STREAMS.find((s) => s.id === streamId);
   if (!next) return;
@@ -188,6 +243,19 @@ function selectStream(streamId, options = {}) {
   [...chips.children].forEach((c, i) => {
     c.classList.toggle("active", STREAMS[i].id === current.id);
   });
+
+  if (isDirectoryStream(current)) {
+    prepareDirectoryStream(current, {
+      shouldAutoplay: !userPaused && !options.skipAutoplay,
+    });
+    return;
+  }
+
+  directoryLoadToken += 1;
+  activeTrackList = [];
+  currentTrackIndex = 0;
+  audio.src = current.url;
+  updateNowPlayingText();
 
   if (!userPaused && !options.skipAutoplay) playStream();
   else {
