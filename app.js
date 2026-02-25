@@ -1,16 +1,17 @@
 /**
  * Streams / local MP3s
+ * NOTE: use absolute paths for local media ("/media/...") so they work everywhere.
  */
 const STREAMS = [
   {
     id: "live",
     name: "Live Gurdwara",
-    url: "media/hazuri1.mp3",
+    url: "/media/hazuri1.mp3",
   },
   {
     id: "asa",
     name: "Asa Ki Vaar",
-    url: "media/Asa_Ki_Vaar_Rajan_Singh.mp3",
+    url: "/media/Asa_Ki_Vaar_Rajan_Singh.mp3",
   },
   {
     id: "rehraas",
@@ -25,15 +26,8 @@ const STREAMS = [
   {
     id: "morning",
     name: "Morning Nitnem",
-    // Directory stream: files are discovered at runtime by scanning links in this folder.
-    url: "media/morning_nitnem/",
-    files: [
-      "Japji_Sahib.mp3",
-      "Jaap_Sahib.mp3",
-      "Tav-Prasad_Savaiye.mp3",
-      "Chaupai_Sahib.mp3",
-      "Anand_Sahib.mp3",
-    ],
+    // Directory stream: files discovered at runtime by scanning this folder.
+    url: "/media/morning_nitnem/",
   },
   {
     id: "tabla",
@@ -43,36 +37,11 @@ const STREAMS = [
 ];
 
 const SCHEDULE = [
-  {
-    id: "morning",
-    label: "Amrit Vela → Morning Nitnem",
-    startHour: 4,
-    endHour: 6,
-  },
-  {
-    id: "asa",
-    label: "Morning → Asa Ki Vaar",
-    startHour: 6,
-    endHour: 12,
-  },
-  {
-    id: "live",
-    label: "Daytime → Live Gurdwara",
-    startHour: 12,
-    endHour: 18,
-  },
-  {
-    id: "rehraas",
-    label: "Evening → Rehraas Sahib",
-    startHour: 18,
-    endHour: 21,
-  },
-  {
-    id: "sohila",
-    label: "Night → Sohila / Simran",
-    startHour: 21,
-    endHour: 3,
-  },
+  { id: "morning", label: "Amrit Vela → Morning Nitnem", startHour: 4, endHour: 6 },
+  { id: "asa", label: "Morning → Asa Ki Vaar", startHour: 6, endHour: 12 },
+  { id: "live", label: "Daytime → Live Gurdwara", startHour: 12, endHour: 18 },
+  { id: "rehraas", label: "Evening → Rehraas Sahib", startHour: 18, endHour: 21 },
+  { id: "sohila", label: "Night → Sohila / Simran", startHour: 21, endHour: 3 },
 ];
 
 const SUPPORTED_AUDIO_EXTENSIONS = new Set([
@@ -91,6 +60,8 @@ const pauseIcon = document.getElementById("pauseIcon");
 const streamName = document.getElementById("streamName");
 const chips = document.getElementById("chips");
 const vol = document.getElementById("vol");
+
+// OPTIONAL UI button (only if you add it to HTML)
 const scheduleToggle = document.getElementById("scheduleToggle");
 
 const statusDot = document.getElementById("statusDot");
@@ -101,25 +72,18 @@ let current = STREAMS[0];
 let userPaused = true;
 let autoScheduleEnabled = true;
 let scheduleTimer = null;
+
+// Directory playlist state
 let currentTrackIndex = 0;
 let activeTrackList = [];
 let directoryLoadToken = 0;
 
-const playedByStream = new Map();
-const directoryTrackCache = new Map();
-
-for (const stream of STREAMS) {
-  if (!isDirectoryStream(stream)) continue;
-  if (Object.prototype.hasOwnProperty.call(stream, "files")) {
-    console.warn(
-      `Ignoring deprecated "files" list on stream "${stream.id}". Directory streams are auto-scanned.`,
-    );
-    delete stream.files;
-  }
-}
+// Tracking
+const playedByStream = new Map();       // streamId -> Set(url)
+const directoryTrackCache = new Map();  // directoryPath -> [trackUrls]
 
 function isDirectoryStream(stream) {
-  return stream.url.endsWith("/");
+  return typeof stream?.url === "string" && stream.url.endsWith("/");
 }
 
 function getTrackNameFromUrl(url) {
@@ -130,7 +94,10 @@ function getTrackNameFromUrl(url) {
 
 function hasSupportedAudioExtension(url) {
   const pathname = new URL(url, window.location.href).pathname.toLowerCase();
-  return [...SUPPORTED_AUDIO_EXTENSIONS].some((ext) => pathname.endsWith(ext));
+  for (const ext of SUPPORTED_AUDIO_EXTENSIONS) {
+    if (pathname.endsWith(ext)) return true;
+  }
+  return false;
 }
 
 function getDirectoryUrl(directoryPath) {
@@ -160,12 +127,11 @@ async function scanDirectoryTracks(directoryPath) {
   }
 
   const response = await fetch(directoryPath, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Directory scan failed: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Directory scan failed: ${response.status}`);
 
   const html = await response.text();
   const tracks = parseDirectoryTracks(html, directoryPath);
+
   directoryTrackCache.set(directoryPath, tracks);
   return tracks;
 }
@@ -176,7 +142,6 @@ function markCurrentTrackPlayed() {
   if (!playedByStream.has(current.id)) {
     playedByStream.set(current.id, new Set());
   }
-
   const currentTrack = activeTrackList[currentTrackIndex];
   playedByStream.get(current.id).add(currentTrack);
 }
@@ -186,7 +151,6 @@ function updateNowPlayingText() {
     streamName.textContent = current.name;
     return;
   }
-
   const trackName = getTrackNameFromUrl(activeTrackList[currentTrackIndex]);
   streamName.textContent = `${current.name} • ${trackName}`;
 }
@@ -222,6 +186,7 @@ function buildChips() {
 
 async function prepareDirectoryStream(stream, { shouldAutoplay = false } = {}) {
   const requestToken = ++directoryLoadToken;
+
   activeTrackList = [];
   currentTrackIndex = 0;
   audio.src = "";
@@ -232,9 +197,8 @@ async function prepareDirectoryStream(stream, { shouldAutoplay = false } = {}) {
   try {
     const tracks = await scanDirectoryTracks(stream.url);
 
-    if (requestToken !== directoryLoadToken || current.id !== stream.id) {
-      return;
-    }
+    // If user switched streams while we were fetching, ignore the result.
+    if (requestToken !== directoryLoadToken || current.id !== stream.id) return;
 
     activeTrackList = tracks;
 
@@ -257,12 +221,10 @@ async function prepareDirectoryStream(stream, { shouldAutoplay = false } = {}) {
     }
   } catch (err) {
     console.error(err);
-    if (requestToken !== directoryLoadToken || current.id !== stream.id) {
-      return;
-    }
+    if (requestToken !== directoryLoadToken || current.id !== stream.id) return;
     setStatus("error", "Scan failed");
     setIcons(false);
-    hint.textContent = "Could not scan directory. Enable directory listing on your server.";
+    hint.textContent = "Could not scan directory. Enable nginx autoindex for this folder.";
   }
 }
 
@@ -277,10 +239,12 @@ function selectStream(streamId, options = {}) {
 
   current = next;
 
+  // chip UI
   [...chips.children].forEach((c, i) => {
     c.classList.toggle("active", STREAMS[i].id === current.id);
   });
 
+  // Directory playlist
   if (isDirectoryStream(current)) {
     prepareDirectoryStream(current, {
       shouldAutoplay: !userPaused && !options.skipAutoplay,
@@ -288,9 +252,11 @@ function selectStream(streamId, options = {}) {
     return;
   }
 
+  // Cancel any directory scan in progress
   directoryLoadToken += 1;
   activeTrackList = [];
   currentTrackIndex = 0;
+
   audio.src = current.url;
   updateNowPlayingText();
 
@@ -298,20 +264,18 @@ function selectStream(streamId, options = {}) {
   else {
     setStatus(null, "Paused");
     setIcons(false);
-    if (isDirectoryStream(current) && activeTrackList.length) {
-      updateDirectoryTrackingHint();
-    } else if (autoScheduleEnabled) {
-      updateScheduleHint(getScheduledStream());
-    }
+    if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
   }
 }
 
 async function playStream() {
   try {
+    // Directory: set current track source before playing
     if (isDirectoryStream(current)) {
       if (!activeTrackList.length) {
         setStatus("error", "No tracks found");
         hint.textContent = "No playable audio files found in this directory.";
+        setIcons(false);
         return;
       }
       audio.src = activeTrackList[currentTrackIndex];
@@ -319,14 +283,15 @@ async function playStream() {
     }
 
     setStatus("loading", "Loading…");
-    hint.textContent = "Loading stream…";
+    hint.textContent = "Loading…";
     await audio.play();
+
     userPaused = false;
-    markCurrentTrackPlayed();
     setStatus("playing", "Playing");
     setIcons(true);
 
     if (isDirectoryStream(current)) {
+      markCurrentTrackPlayed();
       updateDirectoryTrackingHint();
     } else {
       hint.textContent = "Listening. Switch filters anytime.";
@@ -336,7 +301,7 @@ async function playStream() {
     userPaused = true;
     setStatus("error", "Can’t play");
     setIcons(false);
-    hint.textContent = "Playback failed. Check the stream URL.";
+    hint.textContent = "Playback failed. Check the URL / HTTPS / format.";
   }
 }
 
@@ -365,15 +330,14 @@ function updateScheduleHint(entry) {
 }
 
 function updateScheduleToggle() {
+  if (!scheduleToggle) return; // <-- prevents crash if button doesn't exist
   scheduleToggle.classList.toggle("active", autoScheduleEnabled);
-  scheduleToggle.setAttribute(
-    "aria-pressed",
-    autoScheduleEnabled ? "true" : "false",
-  );
+  scheduleToggle.setAttribute("aria-pressed", autoScheduleEnabled ? "true" : "false");
 }
 
 function applySchedule({ shouldPlay } = {}) {
   if (!autoScheduleEnabled) return;
+
   const entry = getScheduledStream();
 
   if (current.id !== entry.id) {
@@ -381,11 +345,10 @@ function applySchedule({ shouldPlay } = {}) {
     return;
   }
 
-  if (shouldPlay) {
-    playStream();
-  } else {
-    updateScheduleHint(entry);
-  }
+  if (shouldPlay && !audio.paused) return;
+
+  if (shouldPlay) playStream();
+  else updateScheduleHint(entry);
 }
 
 function startScheduleTimer() {
@@ -396,6 +359,7 @@ function startScheduleTimer() {
   }, 60 * 1000);
 }
 
+/* UI events */
 playBtn.onclick = () => {
   if (audio.paused) playStream();
   else pauseStream();
@@ -405,22 +369,26 @@ vol.oninput = () => {
   audio.volume = Number(vol.value);
 };
 
+/* Audio events */
 audio.addEventListener("waiting", () => {
   if (!audio.paused) setStatus("loading", "Buffering…");
 });
+
 audio.addEventListener("playing", () => {
   if (!audio.paused) {
-    markCurrentTrackPlayed();
     setStatus("playing", "Playing");
     if (isDirectoryStream(current)) {
+      markCurrentTrackPlayed();
       updateDirectoryTrackingHint();
       updateNowPlayingText();
     }
   }
 });
+
 audio.addEventListener("pause", () => {
   if (userPaused) setStatus(null, "Paused");
 });
+
 audio.addEventListener("error", () => {
   setStatus("error", "Stream error");
   setIcons(false);
@@ -433,29 +401,32 @@ audio.addEventListener("ended", () => {
   playStream();
 });
 
-scheduleToggle.addEventListener("click", () => {
-  autoScheduleEnabled = !autoScheduleEnabled;
-  updateScheduleToggle();
-  if (autoScheduleEnabled) {
-    applySchedule({ shouldPlay: !userPaused });
-  } else if (userPaused) {
-    hint.textContent = "Paused.";
-  }
-});
+/* Schedule toggle (only if exists) */
+if (scheduleToggle) {
+  scheduleToggle.addEventListener("click", () => {
+    autoScheduleEnabled = !autoScheduleEnabled;
+    updateScheduleToggle();
 
+    if (autoScheduleEnabled) {
+      applySchedule({ shouldPlay: !userPaused });
+    } else if (userPaused) {
+      hint.textContent = "Paused.";
+    }
+  });
+}
+
+/* Init */
 audio.volume = Number(vol.value);
-if (!current) current = STREAMS[0];
-if (isDirectoryStream(current)) {
-  prepareDirectoryStream(current, { shouldAutoplay: false });
-} else {
-  audio.src = current.url;
-  updateNowPlayingText();
-  if (autoScheduleEnabled) updateScheduleHint(getScheduledStream());
-}
 buildChips();
-if (userPaused) {
-  setStatus(null, "Paused");
-  setIcons(false);
-}
 updateScheduleToggle();
+setStatus(null, "Paused");
+setIcons(false);
+
+// Apply schedule selection immediately on load (without auto-playing)
+applySchedule({ shouldPlay: false });
+
+// Load first stream
+selectStream(getScheduledStream().id, { skipAutoplay: true });
+
+// Start schedule timer
 startScheduleTimer();
