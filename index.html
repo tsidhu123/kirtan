@@ -3,85 +3,127 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Kirtan Stream</title>
-
-    <!-- Styles -->
+    <title>Sikh Devotional Dashboard</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-
   <body>
-    <div class="app">
-      <section class="stage">
-        <div class="topbar">
-          <div class="brand">
-            <div class="title">Kirtan Stream</div>
-            <div class="subtitle">Simple listening • one page</div>
-          </div>
-
-          <div class="statusPill" id="statusPill" aria-live="polite">
-            <span class="dot" id="statusDot"></span>
-            <span id="statusText">Paused</span>
-          </div>
+    <div class="appShell">
+      <header class="topbar card">
+        <div>
+          <h1>Sikh Devotional Stream</h1>
+          <p class="muted">Calm listening for Gurbani, Kirtan, Nitnem, and live Darbar Sahib audio.</p>
         </div>
-
-        <div class="center">
-          <div class="nowPlaying">
-            <div class="label">Now playing</div>
-            <div class="streamName" id="streamName"></div>
-          </div>
-
-          <button class="playBtn" id="playBtn" aria-label="Play or pause">
-            <svg class="icon" id="playIcon" viewBox="0 0 64 64">
-              <path
-                d="M24 18.5v27c0 1.7 1.9 2.7 3.3 1.8l21.5-13.5c1.3-.8 1.3-2.7 0-3.6L27.3 16.7c-1.4-.9-3.3.1-3.3 1.8z"
-              />
-            </svg>
-
-            <svg
-              class="icon"
-              id="pauseIcon"
-              viewBox="0 0 64 64"
-              style="display: none"
-            >
-              <path
-                d="M22 18c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v28c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2V18zm12 0c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v28c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2V18z"
-              />
-            </svg>
-          </button>
-
-          <div class="hint" id="hint"></div>
-
-          <audio id="audio" preload="none" crossorigin="anonymous"></audio>
+        <div class="topbarActions">
+          <button id="donateTopBtn" class="btn ghost">Donate</button>
+          <button id="authBtn" class="btn">Sign in</button>
         </div>
-      </section>
+      </header>
 
-      <footer class="filters">
-        <div class="filtersHeader">
-          <div>Filters (choose what kind of kirtan you want)</div>
-          <div class="rightControls">
-            <button class="scheduleToggle" id="scheduleToggle" type="button">
-              <span class="indicator" aria-hidden="true"></span>
-              Follow schedule
-            </button>
-            <div class="volume">
-              <span>Volume</span>
-              <input
-                id="vol"
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value="0.9"
-              />
-            </div>
+      <main class="dashboardGrid">
+        <section class="card playerCard span2">
+          <div class="cardHead">
+            <h2>Harmandir Sahib Live Stream</h2>
+            <span id="statusPill" class="status idle">Paused</span>
           </div>
-        </div>
+          <p class="muted" id="sourceLabel">Source: Not selected</p>
+          <div class="playerCenter">
+            <button id="playBtn" class="playBtn" aria-label="Play or pause">▶</button>
+          </div>
+          <div class="playerControls">
+            <label>
+              Volume
+              <input id="volume" type="range" min="0" max="1" step="0.01" value="0.85" />
+            </label>
+            <label>
+              Category
+              <select id="quickCategory"></select>
+            </label>
+          </div>
+          <div class="nowInfo">
+            <strong id="nowTitle">Nothing selected</strong>
+            <span id="nowMeta" class="muted">Choose a live stream or track from the catalog.</span>
+          </div>
+          <audio id="audio" preload="none"></audio>
+        </section>
 
-        <div class="chips" id="chips"></div>
-      </footer>
+        <section class="card notesCard">
+          <div class="cardHead"><h3>Sacred Stream Notes</h3></div>
+          <details open>
+            <summary>About Harmandir Sahib broadcast</summary>
+            <p>
+              This is a live sacred broadcast from Sri Harmandir Sahib. The stream can change based on seva,
+              hukamnama timing, and network/source availability.
+            </p>
+          </details>
+          <details>
+            <summary>Listening etiquette</summary>
+            <p>Keep audio at a respectful level and use this space as a calm devotional companion throughout the day.</p>
+          </details>
+        </section>
+
+        <section class="card catalogCard span2">
+          <div class="cardHead"><h3>Catalog</h3></div>
+          <div class="catalogToolbar">
+            <input id="searchInput" type="search" placeholder="Search title, artist, tags…" />
+            <select id="categoryFilter"></select>
+          </div>
+          <div id="categoryChips" class="chips"></div>
+          <div id="catalogList" class="trackList"></div>
+        </section>
+
+        <section class="card nitnemCard">
+          <div class="cardHead"><h3>Featured Nitnem</h3></div>
+          <div id="nitnemList" class="stackList"></div>
+        </section>
+
+        <section class="card translationCard">
+          <div class="cardHead"><h3>Current Translation</h3></div>
+          <p><strong id="translationTitle">No track selected</strong></p>
+          <p class="muted" id="translationMeta">Select a paath to view meaning and translation.</p>
+          <div id="translationText" class="translationText">Translation appears here.</div>
+        </section>
+
+        <section class="card playlistCard">
+          <div class="cardHead"><h3>Playlist Builder</h3></div>
+          <div class="playlistControls">
+            <input id="playlistName" type="text" placeholder="My playlist name" />
+            <button id="savePlaylistBtn" class="btn">Save</button>
+          </div>
+          <div id="playlistList" class="stackList"></div>
+        </section>
+
+        <section class="card recentCard">
+          <div class="cardHead"><h3>Recently Played</h3></div>
+          <div id="recentList" class="stackList"></div>
+        </section>
+
+        <section class="card scheduleCard">
+          <div class="cardHead"><h3>Time-based Recommendation</h3></div>
+          <p id="scheduleText" class="muted"></p>
+          <button id="playRecommendationBtn" class="btn ghost">Play recommended</button>
+        </section>
+
+        <section class="card donationCard">
+          <div class="cardHead"><h3>Support Seva</h3></div>
+          <p class="muted">Support stream hosting and preservation of devotional recordings.</p>
+          <a class="btn" href="https://www.sikhnet.com/donate" target="_blank" rel="noreferrer">Donate respectfully</a>
+        </section>
+      </main>
     </div>
 
-    <!-- App logic -->
+    <dialog id="authDialog" class="authDialog">
+      <form method="dialog" id="authForm" class="authForm">
+        <h3 id="authTitle">Sign in</h3>
+        <input id="authName" type="text" placeholder="Display name" required />
+        <input id="authEmail" type="email" placeholder="Email" required />
+        <input id="authPassword" type="password" placeholder="Password" required />
+        <div class="authActions">
+          <button id="toggleAuthModeBtn" type="button" class="btn ghost">Need an account?</button>
+          <button id="submitAuthBtn" type="submit" class="btn">Continue</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="app.js"></script>
   </body>
 </html>

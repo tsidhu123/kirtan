@@ -1,17 +1,15 @@
-# kirtan
+# Sikh Devotional Dashboard
 
-Simple one-page kirtan streaming app.
+A modern single-page Sikh devotional streaming dashboard with:
 
-## Directory streams (no hardcoded filenames)
+- Harmandir Sahib live stream player widget
+- Catalog browser with search + category filtering
+- Nitnem widget (Japji Sahib, Jaap Sahib, Tav Prasad Savaiye, Chaupai Sahib, Anand Sahib, Rehraas Sahib, Kirtan Sohila)
+- Translation panel that updates from selected track metadata
+- Playlist builder with add/remove/reorder + localStorage persistence
+- Recently played widget
+- Time-based recommendation widget
+- Mock auth flow (sign up/sign in/log out)
+- Donations widget
 
-If a stream URL ends with `/`, it is treated as a directory stream.
-
-The app will:
-- fetch that directory URL,
-- scan `<a href>` links from the directory listing,
-- keep only supported audio files,
-- and play/track those files in order.
-
-This means you should **not** define fixed filenames in `app.js` for directory streams.
-
-If a `files` list is present for a directory stream, the app ignores it and uses scanned directory results only.
+The app uses a light, card-based dashboard design optimized for desktop and mobile.
