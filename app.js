@@ -506,6 +506,7 @@ function renderAll() {
   renderAuth();
 }
 
+/* UI events */
 playBtn.onclick = () => {
   if (audio.paused) playCurrent();
   else pauseCurrent();
@@ -547,6 +548,7 @@ audio.addEventListener("playing", () => {
   setStatus("playing", "Playing");
   playBtn.textContent = "❚❚";
 });
+
 audio.addEventListener("pause", () => {
   if (audio.currentTime > 0) {
     setStatus("idle", "Paused");
