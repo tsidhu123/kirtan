@@ -7,39 +7,50 @@ const STREAMS = [
     id: "live",
     name: "Live Gurdwara",
     url: "/media/hazuri1.mp3",
+    type: "directory",
   },
   {
     id: "asa",
     name: "Asa Ki Vaar",
     url: "/media/Asa_Ki_Vaar_Rajan_Singh.mp3",
+    type: "directory",
+  },
+  {
+    id: "darbar_sahib_live",
+    name: "Sri Harmandir Sahib (Live)",
+    url: "https://live.sgpc.net:8443/;%20nocache=889869",
+    type: "stream",
   },
   {
     id: "rehraas",
     name: "Rehraas Sahib",
     url: "https://YOUR_STREAM_URL_HERE/rehraas.mp3",
+    type: "directory",
   },
   {
     id: "sohila",
     name: "Sohila / Night Simran",
     url: "https://YOUR_STREAM_URL_HERE/sohila.mp3",
+    type: "directory",
   },
   {
     id: "morning",
     name: "Morning Nitnem",
-    // Directory stream: files discovered at runtime by scanning this folder.
     url: "/media/morning_nitnem/",
+    type: "directory",
   },
   {
     id: "tabla",
     name: "Tabla / Harmonium",
     url: "https://YOUR_STREAM_URL_HERE/tabla.mp3",
+    type: "directory",
   },
 ];
 
 const SCHEDULE = [
   { id: "morning", label: "Amrit Vela → Morning Nitnem", startHour: 4, endHour: 6 },
   { id: "asa", label: "Morning → Asa Ki Vaar", startHour: 6, endHour: 12 },
-  { id: "live", label: "Daytime → Live Gurdwara", startHour: 12, endHour: 18 },
+  { id: "darbar_sahib_live", label: "Daytime → Live Gurdwara", startHour: 12, endHour: 18 },
   { id: "rehraas", label: "Evening → Rehraas Sahib", startHour: 18, endHour: 21 },
   { id: "sohila", label: "Night → Sohila / Simran", startHour: 21, endHour: 3 },
 ];
@@ -83,7 +94,7 @@ const playedByStream = new Map();       // streamId -> Set(url)
 const directoryTrackCache = new Map();  // directoryPath -> [trackUrls]
 
 function isDirectoryStream(stream) {
-  return typeof stream?.url === "string" && stream.url.endsWith("/");
+  return stream.type === "directory";
 }
 
 function getTrackNameFromUrl(url) {
@@ -417,12 +428,14 @@ if (scheduleToggle) {
 
 /* Init */
 audio.volume = Number(vol.value);
+current = STREAMS[0];
+
 buildChips();
-updateScheduleToggle();
 setStatus(null, "Paused");
 setIcons(false);
 
 // Apply schedule selection immediately on load (without auto-playing)
+updateScheduleToggle();
 applySchedule({ shouldPlay: false });
 
 // Load first stream
@@ -430,3 +443,5 @@ selectStream(getScheduledStream().id, { skipAutoplay: true });
 
 // Start schedule timer
 startScheduleTimer();
+
+
